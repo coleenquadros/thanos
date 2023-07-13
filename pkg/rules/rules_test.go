@@ -5,6 +5,7 @@ package rules
 
 import (
 	"context"
+	"github.com/stretchr/testify/assert"
 	"path"
 	"path/filepath"
 	"testing"
@@ -1380,5 +1381,143 @@ func TestFilterRules(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			testutil.Equals(t, tc.want, filterRules(tc.groups, tc.matcherSets))
 		})
+	}
+}
+
+func BenchmarkDedupGroups(b *testing.B) {
+	// Prepare some sample input data for the benchmark
+	groups := []*rulespb.RuleGroup{
+		{
+			Name: "a",
+			Rules: []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a2"}),
+			},
+		},
+		{
+			Name: "a",
+			File: "foo.yaml",
+			Rules: []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a2"}),
+			},
+		},
+		{
+			Name: "a",
+			Rules: []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a2"}),
+			},
+		},
+		{
+			Name: "b",
+			Rules: []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "b1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "b2"}),
+			},
+		},
+		{
+			Name: "c",
+		},
+		{
+			Name: "a",
+			File: "bar.yaml",
+			Rules: []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a2"}),
+			},
+		},
+		{
+			Name: "a",
+			Rules: []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a2"}),
+			},
+		},
+		{
+			Name: "a",
+			File: "foo.yaml",
+			Rules: []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a2"}),
+			},
+		},
+		{
+			Name: "a",
+			Rules: []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a2"}),
+			},
+		},
+		{
+			Name: "b",
+			Rules: []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "b1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "b2"}),
+			},
+		},
+		{
+			Name: "c",
+		},
+		{
+			Name: "a",
+			File: "bar.yaml",
+			Rules: []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a2"}),
+			},
+		},
+		{
+			Name: "a",
+			Rules: []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a2"}),
+			},
+		},
+		{
+			Name: "a",
+			File: "foo.yaml",
+			Rules: []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a2"}),
+			},
+		},
+		{
+			Name: "a",
+			Rules: []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a2"}),
+			},
+		},
+		{
+			Name: "b",
+			Rules: []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "b1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "b2"}),
+			},
+		},
+		{
+			Name: "c",
+		},
+		{
+			Name: "a",
+			File: "bar.yaml",
+			Rules: []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a2"}),
+			},
+		},
+		// Add your sample rule groups here
+	}
+
+	// Run the benchmark
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Call the function under test
+		result := dedupGroups(groups)
+
+		// Perform assertions on the benchmark result, if necessary
+		// For example, you can use the `assert` package to validate the output
+		assert.NotNil(b, result)
 	}
 }
