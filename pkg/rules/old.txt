@@ -1,0 +1,10 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/thanos-io/thanos/pkg/rules
+BenchmarkDedupGroups-10    	1000000000	         0.0000229 ns/op
+BenchmarkDedupGroups-10    	1000000000	         0.0000176 ns/op
+BenchmarkDedupGroups-10    	1000000000	         0.0000136 ns/op
+BenchmarkDedupGroups-10    	1000000000	         0.0000147 ns/op
+BenchmarkDedupGroups-10    	1000000000	         0.0000130 ns/op
+PASS
+ok  	github.com/thanos-io/thanos/pkg/rules	1.254s

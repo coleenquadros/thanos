@@ -1382,3 +1382,51 @@ func TestFilterRules(t *testing.T) {
 		})
 	}
 }
+func generateTestCases() []*rulespb.RuleGroup {
+	testCases := make([]*rulespb.RuleGroup, 0)
+
+	for i := 0; i < 100; i++ {
+		group := &rulespb.RuleGroup{
+			Name: "a",
+			File: "bar.yaml",
+			Rules: []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "a2"}),
+			},
+		}
+
+		if i%2 == 0 {
+			group.Name = "b"
+			group.Rules = []*rulespb.Rule{
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "b1"}),
+				rulespb.NewRecordingRule(&rulespb.RecordingRule{Name: "b2"}),
+			}
+		} else if i%3 == 0 {
+			group.Name = "c"
+			group.Rules = nil
+		}
+
+		testCases = append(testCases, group)
+	}
+
+	return testCases
+}
+func BenchmarkDedupGroups(b *testing.B) {
+
+	testCases := generateTestCases()
+	// Prepare some sample input data for the benchmark
+	groups := make([]*rulespb.RuleGroup, len(testCases))
+	for i, tc := range testCases {
+		groups[i] = tc
+	}
+
+	// Run the benchmark
+	b.ResetTimer()
+	for i := 0; i < 6; i++ {
+		groupsCopy := make([]*rulespb.RuleGroup, len(groups))
+		copy(groupsCopy, groups)
+		// Call the function under test
+		_ = dedupGroups(groups)
+
+	}
+}
