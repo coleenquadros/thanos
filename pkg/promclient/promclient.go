@@ -30,9 +30,6 @@ import (
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
-	"google.golang.org/grpc/codes"
-	"gopkg.in/yaml.v2"
-
 	"github.com/thanos-io/thanos/pkg/exemplars/exemplarspb"
 	"github.com/thanos-io/thanos/pkg/httpconfig"
 	"github.com/thanos-io/thanos/pkg/metadata/metadatapb"
@@ -41,6 +38,8 @@ import (
 	"github.com/thanos-io/thanos/pkg/store/storepb"
 	"github.com/thanos-io/thanos/pkg/targets/targetspb"
 	"github.com/thanos-io/thanos/pkg/tracing"
+	"google.golang.org/grpc/codes"
+	"gopkg.in/yaml.v2"
 )
 
 var (
@@ -197,6 +196,7 @@ type Flags struct {
 	TSDBMaxTime        model.Duration `json:"storage.tsdb.max-block-duration"`
 	WebEnableAdminAPI  bool           `json:"web.enable-admin-api"`
 	WebEnableLifecycle bool           `json:"web.enable-lifecycle"`
+	PromFeature        string         `json:"enable-feature"`
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface.
@@ -211,6 +211,7 @@ func (f *Flags) UnmarshalJSON(b []byte) error {
 		TSDBMaxTime        modelDuration `json:"storage.tsdb.max-block-duration"`
 		WebEnableAdminAPI  modelBool     `json:"web.enable-admin-api"`
 		WebEnableLifecycle modelBool     `json:"web.enable-lifecycle"`
+		PromAgentEnabled   string        `json:"enable-feature"`
 	}{}
 
 	if err := json.Unmarshal(b, &parsableFlags); err != nil {
@@ -224,6 +225,7 @@ func (f *Flags) UnmarshalJSON(b []byte) error {
 		TSDBMaxTime:        model.Duration(parsableFlags.TSDBMaxTime),
 		WebEnableAdminAPI:  bool(parsableFlags.WebEnableAdminAPI),
 		WebEnableLifecycle: bool(parsableFlags.WebEnableLifecycle),
+		PromFeature:        parsableFlags.PromAgentEnabled,
 	}
 	return nil
 }
