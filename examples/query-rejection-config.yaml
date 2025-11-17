@@ -1,0 +1,21 @@
+# Example query rejection configuration for Thanos Query Frontend
+# This file can be referenced using --query-frontend.query-rejection-config flag
+
+blocked_queries:
+  # Block queries containing specific patterns
+  - query_patterns:
+      - "expensive_query"
+      - "rate(.*\[.*\])"  # Block rate queries with long ranges
+      - "sum(.*) by (.*)" # Block complex aggregations
+    
+  # Block queries within a specific time range
+  - time_range:
+      start: "2024-01-01T00:00:00Z"
+      end: "2024-01-31T23:59:59Z"
+    
+  # Block queries matching both pattern and time range
+  - query_patterns:
+      - "debug_query"
+    time_range:
+      start: "2024-01-01T00:00:00Z"
+      end: "2024-12-31T23:59:59Z" 
