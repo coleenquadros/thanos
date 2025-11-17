@@ -159,6 +159,55 @@ Query Frontend supports `--query-frontend.log-queries-longer-than` flag to log q
 
 The field `remote_user` can be read from an HTTP header, like `X-Grafana-User`, by setting `--query-frontend.slow-query-logs-user-header`.
 
+## Query Rejection
+
+Query Frontend supports blocking certain queries based on configured patterns and time ranges. This feature helps prevent expensive queries that could lead to OOM errors or performance issues.
+
+### Configuration
+
+Query rejection is configured using the `--query-frontend.query-rejection-config` flag, which points to a YAML file containing the blocked query patterns.
+
+Example configuration:
+
+```yaml
+blocked_queries:
+  # Block queries containing specific patterns
+  - query_patterns:
+      - "expensive_query"
+      - "rate(.*\[.*\])"  # Block rate queries with long ranges
+      - "sum(.*) by (.*)" # Block complex aggregations
+    
+  # Block queries within a specific time range
+  - time_range:
+      start: "2024-01-01T00:00:00Z"
+      end: "2024-01-31T23:59:59Z"
+    
+  # Block queries matching both pattern and time range
+  - query_patterns:
+      - "debug_query"
+    time_range:
+      start: "2024-01-01T00:00:00Z"
+      end: "2024-12-31T23:59:59Z"
+```
+
+### Query Pattern Matching
+
+Query patterns support:
+- **Exact string matching**: Queries containing the specified string will be blocked
+- **Glob patterns**: Use `*` as a wildcard (e.g., `expensive_*` will block any query starting with "expensive_")
+
+### Time Range Matching
+
+Time ranges can be specified using:
+- **Start time**: Queries starting before this time will be blocked
+- **End time**: Queries ending after this time will be blocked
+- **Both**: Queries must fall within the specified time range
+
+### Metrics
+
+The query rejection middleware exposes the following metric:
+- `cortex_query_frontend_rejected_queries_total`: Total number of queries rejected by the query rejection middleware
+
 ## Naming
 
 Naming is hard :) Please check [here](https://github.com/thanos-io/thanos/pull/2434#discussion_r408300683) to see why we chose `query-frontend` as the name.
