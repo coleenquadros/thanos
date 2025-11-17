@@ -19,6 +19,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/thanos-io/thanos/internal/cortex/querier/queryrange"
+	"github.com/thanos-io/thanos/internal/cortex/querier/tripperware"
 	"github.com/thanos-io/thanos/internal/cortex/util/validation"
 )
 
@@ -63,13 +64,13 @@ func NewTripperware(config Config, reg prometheus.Registerer, logger log.Logger)
 		queryRangeCodec,
 		config.NumShards,
 		config.CortexHandlerConfig.QueryStatsEnabled,
-		prometheus.WrapRegistererWith(prometheus.Labels{"tripperware": "query_range"}, reg), logger, config.ForwardHeaders)
+		prometheus.WrapRegistererWith(prometheus.Labels{"tripperware": "query_range"}, reg), logger, config.ForwardHeaders, config.QueryRejectionConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	labelsTripperware, err := newLabelsTripperware(config.LabelsConfig, labelsLimits, labelsCodec,
-		prometheus.WrapRegistererWith(prometheus.Labels{"tripperware": "labels"}, reg), logger, config.ForwardHeaders)
+		prometheus.WrapRegistererWith(prometheus.Labels{"tripperware": "labels"}, reg), logger, config.ForwardHeaders, config.QueryRejectionConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -80,6 +81,7 @@ func NewTripperware(config Config, reg prometheus.Registerer, logger log.Logger)
 		prometheus.WrapRegistererWith(prometheus.Labels{"tripperware": "query_instant"}, reg),
 		config.ForwardHeaders,
 		config.CortexHandlerConfig.QueryStatsEnabled,
+		config.QueryRejectionConfig,
 	)
 	return func(next http.RoundTripper) http.RoundTripper {
 		tripper := newRoundTripper(
@@ -168,9 +170,19 @@ func newQueryRangeTripperware(
 	reg prometheus.Registerer,
 	logger log.Logger,
 	forwardHeaders []string,
+	queryRejectionConfig QueryRejectionConfig,
 ) (queryrange.Tripperware, error) {
 	queryRangeMiddleware := []queryrange.Middleware{queryrange.NewLimitsMiddleware(limits)}
 	m := queryrange.NewInstrumentMiddlewareMetrics(reg)
+
+	// Add query rejection middleware if configured
+	if len(queryRejectionConfig.BlockedQueries) > 0 {
+		queryRangeMiddleware = append(
+			queryRangeMiddleware,
+			queryrange.InstrumentMiddleware("query_rejection", m),
+			tripperware.NewQueryRejectionMiddleware(convertToTripperwareConfig(queryRejectionConfig), logger, tripperware.NewQueryRejectionMiddlewareMetrics(reg)),
+		)
+	}
 
 	queryRangeMiddleware = append(
 		queryRangeMiddleware,
@@ -282,9 +294,19 @@ func newLabelsTripperware(
 	reg prometheus.Registerer,
 	logger log.Logger,
 	forwardHeaders []string,
+	queryRejectionConfig QueryRejectionConfig,
 ) (queryrange.Tripperware, error) {
 	labelsMiddleware := []queryrange.Middleware{}
 	m := queryrange.NewInstrumentMiddlewareMetrics(reg)
+
+	// Add query rejection middleware if configured
+	if len(queryRejectionConfig.BlockedQueries) > 0 {
+		labelsMiddleware = append(
+			labelsMiddleware,
+			queryrange.InstrumentMiddleware("query_rejection", m),
+			tripperware.NewQueryRejectionMiddleware(convertToTripperwareConfig(queryRejectionConfig), logger, tripperware.NewQueryRejectionMiddlewareMetrics(reg)),
+		)
+	}
 
 	queryIntervalFn := func(_ queryrange.Request) time.Duration {
 		return config.SplitQueriesByInterval
@@ -343,9 +365,20 @@ func newInstantQueryTripperware(
 	reg prometheus.Registerer,
 	forwardHeaders []string,
 	forceStats bool,
+	queryRejectionConfig QueryRejectionConfig,
 ) queryrange.Tripperware {
 	var instantQueryMiddlewares []queryrange.Middleware
 	m := queryrange.NewInstrumentMiddlewareMetrics(reg)
+
+	// Add query rejection middleware if configured
+	if len(queryRejectionConfig.BlockedQueries) > 0 {
+		instantQueryMiddlewares = append(
+			instantQueryMiddlewares,
+			queryrange.InstrumentMiddleware("query_rejection", m),
+			tripperware.NewQueryRejectionMiddleware(convertToTripperwareConfig(queryRejectionConfig), log.NewNopLogger(), tripperware.NewQueryRejectionMiddlewareMetrics(reg)),
+		)
+	}
+
 	if numShards > 0 {
 		analyzer := querysharding.NewQueryAnalyzer()
 		instantQueryMiddlewares = append(
@@ -385,4 +418,11 @@ func shouldCache(r queryrange.Request) bool {
 	}
 
 	return !r.GetCachingOptions().Disabled
+}
+
+// convertToTripperwareConfig converts QueryRejectionConfig to tripperware.QueryRejectionConfig
+func convertToTripperwareConfig(config QueryRejectionConfig) tripperware.QueryRejectionConfig {
+	return tripperware.QueryRejectionConfig{
+		BlockedQueries: config.BlockedQueries,
+	}
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/thanos-io/thanos/internal/cortex/frontend/transport"
 	"github.com/thanos-io/thanos/internal/cortex/querier"
 	"github.com/thanos-io/thanos/internal/cortex/querier/queryrange"
+	"github.com/thanos-io/thanos/internal/cortex/querier/tripperware"
 	"github.com/thanos-io/thanos/internal/cortex/util/flagext"
 	cortexvalidation "github.com/thanos-io/thanos/internal/cortex/util/validation"
 	"github.com/thanos-io/thanos/pkg/cacheutil"
@@ -214,6 +215,7 @@ type Config struct {
 	TenantCertField        string
 	EnableXFunctions       bool
 	EnableFeatures         []string
+	QueryRejectionConfig   QueryRejectionConfig
 }
 
 // QueryRangeConfig holds the config for query range tripperware.
@@ -321,4 +323,10 @@ func (cfg *Config) isDynamicSplitSet() bool {
 	return cfg.MinQuerySplitInterval > 0 ||
 		cfg.HorizontalShards > 0 ||
 		cfg.MaxQuerySplitInterval > 0
+}
+
+// QueryRejectionConfig holds configuration for query rejection
+type QueryRejectionConfig struct {
+	BlockedQueries     []tripperware.QueryAttributeMatcher `yaml:"blocked_queries"`
+	CachePathOrContent extflag.PathOrContent
 }

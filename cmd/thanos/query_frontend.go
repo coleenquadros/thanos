@@ -26,6 +26,7 @@ import (
 	cortexfrontend "github.com/thanos-io/thanos/internal/cortex/frontend"
 	"github.com/thanos-io/thanos/internal/cortex/frontend/transport"
 	"github.com/thanos-io/thanos/internal/cortex/querier/queryrange"
+	"github.com/thanos-io/thanos/internal/cortex/querier/tripperware"
 	cortexvalidation "github.com/thanos-io/thanos/internal/cortex/util/validation"
 	"github.com/thanos-io/thanos/pkg/api"
 	"github.com/thanos-io/thanos/pkg/component"
@@ -170,6 +171,9 @@ func registerQueryFrontend(app *extkingpin.App) {
 
 	cmd.Flag("query-frontend.slow-query-logs-user-header", "Set the value of the field remote_user in the slow query logs to the value of the given HTTP header. Falls back to reading the user from the basic auth header.").PlaceHolder("<http-header-name>").Default("").StringVar(&cfg.CortexHandlerConfig.SlowQueryLogsUserHeader)
 
+	// Query rejection configuration
+	cfg.QueryRejectionConfig.CachePathOrContent = *extflag.RegisterPathOrContent(cmd, "query-frontend.query-rejection-config", "YAML file that contains query rejection configuration.", extflag.WithEnvSubstitution())
+
 	reqLogConfig := extkingpin.RegisterRequestLoggingFlags(cmd)
 
 	cmd.Setup(func(g *run.Group, logger log.Logger, reg *prometheus.Registry, tracer opentracing.Tracer, _ <-chan struct{}, _ bool) error {
@@ -294,6 +298,21 @@ func runQueryFrontend(
 			Compression: cfg.CacheCompression,
 			CacheConfig: *cacheConfig,
 		}
+	}
+
+	// Parse query rejection configuration
+	queryRejectionConfContentYaml, err := cfg.QueryRejectionConfig.CachePathOrContent.Content()
+	if err != nil {
+		return err
+	}
+	if len(queryRejectionConfContentYaml) > 0 {
+		var queryRejectionConfig struct {
+			BlockedQueries []tripperware.QueryAttributeMatcher `yaml:"blocked_queries"`
+		}
+		if err := yaml.UnmarshalStrict(queryRejectionConfContentYaml, &queryRejectionConfig); err != nil {
+			return errors.Wrap(err, "parsing query rejection config YAML file")
+		}
+		cfg.QueryRejectionConfig.BlockedQueries = queryRejectionConfig.BlockedQueries
 	}
 
 	if err := cfg.Validate(); err != nil {
