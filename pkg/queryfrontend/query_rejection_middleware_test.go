@@ -1,17 +1,18 @@
 // Copyright (c) The Cortex Authors.
 // Licensed under the Apache License 2.0.
 
-package tripperware
+package queryfrontend
 
 import (
 	"context"
+	"github.com/prometheus/common/model"
 	"testing"
 	"time"
 
+	"github.com/thanos-io/thanos/internal/cortex/querier/queryrange"
+
 	"github.com/go-kit/log"
 	"github.com/stretchr/testify/require"
-
-	"github.com/thanos-io/thanos/internal/cortex/querier/queryrange"
 )
 
 func TestQueryRejectionMiddleware(t *testing.T) {
@@ -53,21 +54,22 @@ func TestQueryRejectionMiddleware(t *testing.T) {
 			shouldReject: false,
 		},
 		{
-			name: "should reject query matching time range",
+			name: "should reject query matching time window",
 			config: QueryRejectionConfig{
 				BlockedQueries: []QueryAttributeMatcher{
 					{
-						TimeRange: TimeRange{
-							Start: time.Now().Add(-2 * time.Hour),
-							End:   time.Now().Add(-1 * time.Hour),
+						TimeWindow: TimeWindow{
+							Start: model.Duration(2 * time.Hour),
+							End:   model.Duration(1 * time.Hour),
 						},
 					},
 				},
 			},
-			query:        "any_query",
-			start:        time.Now().Add(-90 * time.Minute).UnixMilli(),
-			end:          time.Now().Add(-30 * time.Minute).UnixMilli(),
-			shouldReject: true,
+			query:         "any_query",
+			start:         time.Now().Add(-90 * time.Minute).UnixMilli(),
+			end:           time.Now().Add(-65 * time.Minute).UnixMilli(),
+			shouldReject:  true,
+			expectedError: "query rejected: query 'any_query' matches blocked pattern",
 		},
 	}
 
@@ -76,7 +78,7 @@ func TestQueryRejectionMiddleware(t *testing.T) {
 			middleware := NewQueryRejectionMiddleware(tt.config, log.NewNopLogger(), nil)
 
 			// Create a mock request
-			req := &queryrange.PrometheusRequest{
+			req := &ThanosQueryRangeRequest{
 				Query: tt.query,
 				Start: tt.start,
 				End:   tt.end,

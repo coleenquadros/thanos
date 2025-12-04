@@ -19,7 +19,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/thanos-io/thanos/internal/cortex/querier/queryrange"
-	"github.com/thanos-io/thanos/internal/cortex/querier/tripperware"
 	"github.com/thanos-io/thanos/internal/cortex/util/validation"
 )
 
@@ -64,13 +63,15 @@ func NewTripperware(config Config, reg prometheus.Registerer, logger log.Logger)
 		queryRangeCodec,
 		config.NumShards,
 		config.CortexHandlerConfig.QueryStatsEnabled,
-		prometheus.WrapRegistererWith(prometheus.Labels{"tripperware": "query_range"}, reg), logger, config.ForwardHeaders, config.QueryRejectionConfig)
+		config.QueryRejectionConfig,
+		prometheus.WrapRegistererWith(prometheus.Labels{"tripperware": "query_range"}, reg), logger, config.ForwardHeaders)
 	if err != nil {
 		return nil, err
 	}
 
 	labelsTripperware, err := newLabelsTripperware(config.LabelsConfig, labelsLimits, labelsCodec,
-		prometheus.WrapRegistererWith(prometheus.Labels{"tripperware": "labels"}, reg), logger, config.ForwardHeaders, config.QueryRejectionConfig)
+		config.QueryRejectionConfig,
+		prometheus.WrapRegistererWith(prometheus.Labels{"tripperware": "labels"}, reg), logger, config.ForwardHeaders)
 	if err != nil {
 		return nil, err
 	}
@@ -167,10 +168,10 @@ func newQueryRangeTripperware(
 	codec *queryRangeCodec,
 	numShards int,
 	forceStats bool,
+	queryRejectionConfig QueryRejectionConfig,
 	reg prometheus.Registerer,
 	logger log.Logger,
 	forwardHeaders []string,
-	queryRejectionConfig QueryRejectionConfig,
 ) (queryrange.Tripperware, error) {
 	queryRangeMiddleware := []queryrange.Middleware{queryrange.NewLimitsMiddleware(limits)}
 	m := queryrange.NewInstrumentMiddlewareMetrics(reg)
@@ -180,7 +181,7 @@ func newQueryRangeTripperware(
 		queryRangeMiddleware = append(
 			queryRangeMiddleware,
 			queryrange.InstrumentMiddleware("query_rejection", m),
-			tripperware.NewQueryRejectionMiddleware(convertToTripperwareConfig(queryRejectionConfig), logger, tripperware.NewQueryRejectionMiddlewareMetrics(reg)),
+			NewQueryRejectionMiddleware(convertToTripperwareConfig(queryRejectionConfig), logger, NewQueryRejectionMiddlewareMetrics(reg)),
 		)
 	}
 
@@ -291,10 +292,10 @@ func newLabelsTripperware(
 	config LabelsConfig,
 	limits queryrange.Limits,
 	codec *labelsCodec,
+	queryRejectionConfig QueryRejectionConfig,
 	reg prometheus.Registerer,
 	logger log.Logger,
 	forwardHeaders []string,
-	queryRejectionConfig QueryRejectionConfig,
 ) (queryrange.Tripperware, error) {
 	labelsMiddleware := []queryrange.Middleware{}
 	m := queryrange.NewInstrumentMiddlewareMetrics(reg)
@@ -304,7 +305,7 @@ func newLabelsTripperware(
 		labelsMiddleware = append(
 			labelsMiddleware,
 			queryrange.InstrumentMiddleware("query_rejection", m),
-			tripperware.NewQueryRejectionMiddleware(convertToTripperwareConfig(queryRejectionConfig), logger, tripperware.NewQueryRejectionMiddlewareMetrics(reg)),
+			NewQueryRejectionMiddleware(convertToTripperwareConfig(queryRejectionConfig), logger, NewQueryRejectionMiddlewareMetrics(reg)),
 		)
 	}
 
@@ -375,7 +376,7 @@ func newInstantQueryTripperware(
 		instantQueryMiddlewares = append(
 			instantQueryMiddlewares,
 			queryrange.InstrumentMiddleware("query_rejection", m),
-			tripperware.NewQueryRejectionMiddleware(convertToTripperwareConfig(queryRejectionConfig), log.NewNopLogger(), tripperware.NewQueryRejectionMiddlewareMetrics(reg)),
+			NewQueryRejectionMiddleware(convertToTripperwareConfig(queryRejectionConfig), log.NewNopLogger(), NewQueryRejectionMiddlewareMetrics(reg)),
 		)
 	}
 
@@ -421,8 +422,8 @@ func shouldCache(r queryrange.Request) bool {
 }
 
 // convertToTripperwareConfig converts QueryRejectionConfig to tripperware.QueryRejectionConfig
-func convertToTripperwareConfig(config QueryRejectionConfig) tripperware.QueryRejectionConfig {
-	return tripperware.QueryRejectionConfig{
+func convertToTripperwareConfig(config QueryRejectionConfig) QueryRejectionConfig {
+	return QueryRejectionConfig{
 		BlockedQueries: config.BlockedQueries,
 	}
 }

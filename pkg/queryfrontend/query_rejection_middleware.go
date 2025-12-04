@@ -1,12 +1,14 @@
 // Copyright (c) The Cortex Authors.
 // Licensed under the Apache License 2.0.
 
-package tripperware
+package queryfrontend
 
 import (
 	"context"
 	"fmt"
 	"net/http"
+
+	"github.com/thanos-io/thanos/internal/cortex/querier/queryrange"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
@@ -14,14 +16,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/weaveworks/common/httpgrpc"
 
-	"github.com/thanos-io/thanos/internal/cortex/querier/queryrange"
 	"github.com/thanos-io/thanos/internal/cortex/util/spanlogger"
 )
-
-// QueryRejectionConfig holds configuration for query rejection
-type QueryRejectionConfig struct {
-	BlockedQueries []QueryAttributeMatcher `yaml:"blocked_queries"`
-}
 
 // QueryRejectionMiddlewareMetrics holds metrics for query rejection
 type QueryRejectionMiddlewareMetrics struct {
@@ -66,7 +62,6 @@ func (qrm queryRejectionMiddleware) Do(ctx context.Context, req queryrange.Reque
 	log, ctx := spanlogger.New(ctx, "query_rejection")
 	defer log.Finish()
 
-	op := req.GetOperation()
 	// Check if the query should be rejected
 	for _, blockedQuery := range qrm.config.BlockedQueries {
 		if blockedQuery.Match(req) {
@@ -86,4 +81,19 @@ func (qrm queryRejectionMiddleware) Do(ctx context.Context, req queryrange.Reque
 	}
 
 	return qrm.next.Do(ctx, req)
+}
+
+func getReqType(req queryrange.Request) string {
+	switch req.(type) {
+	case *ThanosQueryRangeRequest:
+		return "range"
+	case *ThanosQueryInstantRequest:
+		return "instant"
+	case *ThanosLabelsRequest:
+		return "labels"
+	case *ThanosSeriesRequest:
+		return "series"
+	default:
+		return "unknown"
+	}
 }
