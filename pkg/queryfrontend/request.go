@@ -92,6 +92,10 @@ func (r *ThanosQueryRangeRequest) GetStats() string { return r.Stats }
 
 func (r *ThanosQueryRangeRequest) GetSplitInterval() time.Duration { return r.SplitInterval }
 
+func (r *ThanosQueryRangeRequest) GetHeaders() []*RequestHeader {
+	return r.Headers
+}
+
 func (r *ThanosQueryRangeRequest) WithStats(stats string) queryrange.Request {
 	q := *r
 	q.Stats = stats
@@ -200,6 +204,10 @@ func (r *ThanosQueryInstantRequest) GetCachingOptions() queryrange.CachingOption
 
 func (r *ThanosQueryInstantRequest) GetStats() string { return r.Stats }
 
+func (r *ThanosQueryInstantRequest) GetHeaders() []*RequestHeader {
+	return r.Headers
+}
+
 func (r *ThanosQueryInstantRequest) WithStats(stats string) queryrange.Request {
 	q := *r
 	q.Stats = stats
@@ -286,6 +294,8 @@ func (r *ThanosLabelsRequest) GetCachingOptions() queryrange.CachingOptions { re
 func (r *ThanosLabelsRequest) GetStats() string { return r.Stats }
 
 func (r *ThanosLabelsRequest) GetSplitInterval() time.Duration { return r.SplitInterval }
+
+func (r *ThanosLabelsRequest) GetHeaders() []*RequestHeader { return r.Headers }
 
 func (r *ThanosLabelsRequest) WithStats(stats string) queryrange.Request {
 	q := *r
@@ -381,6 +391,8 @@ func (r *ThanosSeriesRequest) GetCachingOptions() queryrange.CachingOptions { re
 func (r *ThanosSeriesRequest) GetStats() string { return r.Stats }
 
 func (r *ThanosSeriesRequest) GetSplitInterval() time.Duration { return r.SplitInterval }
+
+func (r *ThanosSeriesRequest) GetHeaders() []*RequestHeader { return r.Headers }
 
 func (r *ThanosSeriesRequest) WithStats(stats string) queryrange.Request {
 	q := *r

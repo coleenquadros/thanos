@@ -26,7 +26,6 @@ import (
 	cortexfrontend "github.com/thanos-io/thanos/internal/cortex/frontend"
 	"github.com/thanos-io/thanos/internal/cortex/frontend/transport"
 	"github.com/thanos-io/thanos/internal/cortex/querier/queryrange"
-	"github.com/thanos-io/thanos/internal/cortex/querier/tripperware"
 	cortexvalidation "github.com/thanos-io/thanos/internal/cortex/util/validation"
 	"github.com/thanos-io/thanos/pkg/api"
 	"github.com/thanos-io/thanos/pkg/component"
@@ -307,7 +306,7 @@ func runQueryFrontend(
 	}
 	if len(queryRejectionConfContentYaml) > 0 {
 		var queryRejectionConfig struct {
-			BlockedQueries []tripperware.QueryAttributeMatcher `yaml:"blocked_queries"`
+			BlockedQueries []queryfrontend.QueryAttributeMatcher `yaml:"blocked_queries"`
 		}
 		if err := yaml.UnmarshalStrict(queryRejectionConfContentYaml, &queryRejectionConfig); err != nil {
 			return errors.Wrap(err, "parsing query rejection config YAML file")
