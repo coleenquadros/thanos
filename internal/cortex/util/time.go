@@ -4,14 +4,17 @@
 package util
 
 import (
+	"github.com/pkg/errors"
+	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/promql"
+	"github.com/prometheus/prometheus/promql/parser"
+	"github.com/weaveworks/common/httpgrpc"
 	"math"
 	"math/rand"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
-
-	"github.com/prometheus/common/model"
-	"github.com/weaveworks/common/httpgrpc"
 )
 
 const (
@@ -86,4 +89,48 @@ func NewDisableableTicker(interval time.Duration) (func(), <-chan time.Time) {
 
 	tick := time.NewTicker(interval)
 	return func() { tick.Stop() }, tick.C
+}
+
+// ParseTimeParam parses the time request parameter into an int64, milliseconds since epoch.
+func ParseTimeParam(r *http.Request, paramName string, defaultValue int64) (int64, error) {
+	val := r.FormValue(paramName)
+	if val == "" {
+		val = strconv.FormatInt(defaultValue, 10)
+	}
+	result, err := ParseTime(val)
+	if err != nil {
+		return 0, errors.Wrapf(err, "Invalid time value for '%s'", paramName)
+	}
+	return result, nil
+}
+
+// FindMinMaxTime returns the time in milliseconds of the earliest and latest point in time the statement will try to process.
+// This takes into account offsets, @ modifiers, and range selectors.
+// If the expression does not select series, then FindMinMaxTime returns (0, 0).
+func FindMinMaxTime(r *http.Request, expr parser.Expr, lookbackDelta time.Duration, now time.Time) (int64, int64) {
+	isQuery := strings.HasSuffix(r.URL.Path, "/query")
+
+	var startTime, endTime int64
+	if isQuery {
+		if t, err := ParseTimeParam(r, "time", now.UnixMilli()); err == nil {
+			startTime = t
+			endTime = t
+		}
+	} else {
+		if st, err := ParseTime(r.FormValue("start")); err == nil {
+			if et, err := ParseTime(r.FormValue("end")); err == nil {
+				startTime = st
+				endTime = et
+			}
+		}
+	}
+
+	es := &parser.EvalStmt{
+		Expr:          expr,
+		Start:         TimeFromMillis(startTime),
+		End:           TimeFromMillis(endTime),
+		LookbackDelta: lookbackDelta,
+	}
+
+	return promql.FindMinMaxTime(es)
 }

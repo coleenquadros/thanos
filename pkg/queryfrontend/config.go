@@ -18,7 +18,6 @@ import (
 	"github.com/thanos-io/thanos/internal/cortex/frontend/transport"
 	"github.com/thanos-io/thanos/internal/cortex/querier"
 	"github.com/thanos-io/thanos/internal/cortex/querier/queryrange"
-	"github.com/thanos-io/thanos/internal/cortex/querier/tripperware"
 	"github.com/thanos-io/thanos/internal/cortex/util/flagext"
 	cortexvalidation "github.com/thanos-io/thanos/internal/cortex/util/validation"
 	"github.com/thanos-io/thanos/pkg/cacheutil"
@@ -327,6 +326,6 @@ func (cfg *Config) isDynamicSplitSet() bool {
 
 // QueryRejectionConfig holds configuration for query rejection
 type QueryRejectionConfig struct {
-	BlockedQueries     []tripperware.QueryAttributeMatcher `yaml:"blocked_queries"`
+	BlockedQueries     []QueryAttributeMatcher `yaml:"blocked_queries"`
 	CachePathOrContent extflag.PathOrContent
 }
