@@ -979,3 +979,316 @@ func seriesResults(fail bool) (*int, http.Handler) {
 		count++
 	})
 }
+
+// TestRoundTripQueryRejectMiddleware tests the query reject middleware.
+func TestRoundTripQueryRejectMiddleware(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		config        QueryRejectionConfig
+		request       queryrange.Request
+		expectRejected bool
+	}{
+		{
+			name: "should pass allowed query",
+			config: QueryRejectionConfig{
+				BlockedQueries: []QueryAttributeMatcher{
+					{
+						QueryPatterns: []string{"expensive_query"},
+					},
+				},
+			},
+			request: &ThanosQueryRangeRequest{
+				Path:  "/api/v1/query_range",
+				Start: 0,
+				End:   2 * hour,
+				Step:  10 * seconds,
+				Query: "allowed_query",
+			},
+			expectRejected: false,
+		},
+		{
+			name: "should reject blocked query pattern",
+			config: QueryRejectionConfig{
+				BlockedQueries: []QueryAttributeMatcher{
+					{
+						QueryPatterns: []string{"expensive_query"},
+					},
+				},
+			},
+			request: &ThanosQueryRangeRequest{
+				Path:  "/api/v1/query_range",
+				Start: 0,
+				End:   2 * hour,
+				Step:  10 * seconds,
+				Query: "expensive_query{job=\"test\"}",
+			},
+			expectRejected: true,
+		},
+		{
+			name: "should reject query with regex pattern",
+			config: QueryRejectionConfig{
+				BlockedQueries: []QueryAttributeMatcher{
+					{
+						QueryPatterns: []string{"^expensive_.*"},
+					},
+				},
+			},
+			request: &ThanosQueryRangeRequest{
+				Path:  "/api/v1/query_range",
+				Start: 0,
+				End:   2 * hour,
+				Step:  10 * seconds,
+				Query: "expensive_computation{job=\"test\"}",
+			},
+			expectRejected: true,
+		},
+		{
+			name: "should reject query based on api type",
+			config: QueryRejectionConfig{
+				BlockedQueries: []QueryAttributeMatcher{
+					{
+						ApiType: "range",
+					},
+				},
+			},
+			request: &ThanosQueryRangeRequest{
+				Path:  "/api/v1/query_range",
+				Start: 0,
+				End:   2 * hour,
+				Step:  10 * seconds,
+				Query: "any_query",
+			},
+			expectRejected: true,
+		},
+		{
+			name: "should pass instant query when range is blocked",
+			config: QueryRejectionConfig{
+				BlockedQueries: []QueryAttributeMatcher{
+					{
+						ApiType: "range",
+					},
+				},
+			},
+			request: &ThanosQueryInstantRequest{
+				Path:  "/api/v1/query",
+				Time:  1000,
+				Query: "any_query",
+			},
+			expectRejected: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create tripperware with rejection config
+			tpw, err := NewTripperware(
+				Config{
+					CortexHandlerConfig: &transport.HandlerConfig{},
+					QueryRangeConfig: QueryRangeConfig{
+						Limits:                 defaultLimits,
+						SplitQueriesByInterval: day,
+					},
+					LabelsConfig: LabelsConfig{
+						Limits:                 defaultLimits,
+						SplitQueriesByInterval: day,
+					},
+					QueryRejectionConfig: tc.config,
+				}, nil, log.NewNopLogger(),
+			)
+			testutil.Ok(t, err)
+
+			rt, err := newFakeRoundTripper()
+			testutil.Ok(t, err)
+			defer rt.Close()
+			_, handler := promqlResults(false)
+			rt.setHandler(handler)
+
+			ctx := user.InjectOrgID(context.Background(), "1")
+			codec := NewThanosQueryRangeCodec(true)
+			httpReq, err := codec.EncodeRequest(ctx, tc.request)
+			testutil.Ok(t, err)
+
+			// Execute request
+			resp, err := tpw(rt).RoundTrip(httpReq)
+
+			if tc.expectRejected {
+				// Should be rejected with error
+				testutil.NotOk(t, err)
+			} else {
+				// Should succeed
+				testutil.Ok(t, err)
+				testutil.Assert(t, resp.StatusCode == 200)
+			}
+		})
+	}
+}
+
+// TestRoundTripLabelsRejectMiddleware tests the labels reject middleware.
+func TestRoundTripLabelsRejectMiddleware(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		config        QueryRejectionConfig
+		request       *ThanosLabelsRequest
+		expectRejected bool
+	}{
+		{
+			name: "should pass labels request when not blocked",
+			config: QueryRejectionConfig{
+				BlockedQueries: []QueryAttributeMatcher{
+					{
+						ApiType: "range",
+					},
+				},
+			},
+			request: &ThanosLabelsRequest{
+				Path:  "/api/v1/labels",
+				Start: 0,
+				End:   2 * hour,
+			},
+			expectRejected: false,
+		},
+		{
+			name: "should reject labels request when api type blocked",
+			config: QueryRejectionConfig{
+				BlockedQueries: []QueryAttributeMatcher{
+					{
+						ApiType: "labels",
+					},
+				},
+			},
+			request: &ThanosLabelsRequest{
+				Path:  "/api/v1/labels",
+				Start: 0,
+				End:   2 * hour,
+			},
+			expectRejected: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create tripperware with rejection config
+			tpw, err := NewTripperware(
+				Config{
+					CortexHandlerConfig: &transport.HandlerConfig{},
+					QueryRangeConfig: QueryRangeConfig{
+						Limits:                 defaultLimits,
+						SplitQueriesByInterval: day,
+					},
+					LabelsConfig: LabelsConfig{
+						Limits:                 defaultLimits,
+						SplitQueriesByInterval: day,
+					},
+					QueryRejectionConfig: tc.config,
+				}, nil, log.NewNopLogger(),
+			)
+			testutil.Ok(t, err)
+
+			rt, err := newFakeRoundTripper()
+			testutil.Ok(t, err)
+			defer rt.Close()
+			_, handler := labelsResults(false)
+			rt.setHandler(handler)
+
+			ctx := user.InjectOrgID(context.Background(), "1")
+			codec := NewThanosLabelsCodec(true, 2*time.Hour)
+			httpReq, err := codec.EncodeRequest(ctx, tc.request)
+			testutil.Ok(t, err)
+
+			// Execute request
+			resp, err := tpw(rt).RoundTrip(httpReq)
+
+			if tc.expectRejected {
+				// Should be rejected with error
+				testutil.NotOk(t, err)
+			} else {
+				// Should succeed
+				testutil.Ok(t, err)
+				testutil.Assert(t, resp.StatusCode == 200)
+			}
+		})
+	}
+}
+
+// TestRoundTripSeriesRejectMiddleware tests the series reject middleware.
+func TestRoundTripSeriesRejectMiddleware(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		config        QueryRejectionConfig
+		request       *ThanosSeriesRequest
+		expectRejected bool
+	}{
+		{
+			name: "should pass series request when not blocked",
+			config: QueryRejectionConfig{
+				BlockedQueries: []QueryAttributeMatcher{
+					{
+						ApiType: "range",
+					},
+				},
+			},
+			request: &ThanosSeriesRequest{
+				Path:     "/api/v1/series",
+				Start:    0,
+				End:      2 * hour,
+				Matchers: [][]*labels.Matcher{{labels.MustNewMatcher(labels.MatchEqual, "foo", "bar")}},
+			},
+			expectRejected: false,
+		},
+		{
+			name: "should reject series request when api type blocked",
+			config: QueryRejectionConfig{
+				BlockedQueries: []QueryAttributeMatcher{
+					{
+						ApiType: "series",
+					},
+				},
+			},
+			request: &ThanosSeriesRequest{
+				Path:     "/api/v1/series",
+				Start:    0,
+				End:      2 * hour,
+				Matchers: [][]*labels.Matcher{{labels.MustNewMatcher(labels.MatchEqual, "foo", "bar")}},
+			},
+			expectRejected: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create tripperware with rejection config
+			tpw, err := NewTripperware(
+				Config{
+					CortexHandlerConfig: &transport.HandlerConfig{},
+					QueryRangeConfig: QueryRangeConfig{
+						Limits:                 defaultLimits,
+						SplitQueriesByInterval: day,
+					},
+					LabelsConfig: LabelsConfig{
+						Limits:                 defaultLimits,
+						SplitQueriesByInterval: day,
+					},
+					QueryRejectionConfig: tc.config,
+				}, nil, log.NewNopLogger(),
+			)
+			testutil.Ok(t, err)
+
+			rt, err := newFakeRoundTripper()
+			testutil.Ok(t, err)
+			defer rt.Close()
+			_, handler := seriesResults(false)
+			rt.setHandler(handler)
+
+			ctx := user.InjectOrgID(context.Background(), "1")
+			codec := NewThanosLabelsCodec(true, 2*time.Hour)
+			httpReq, err := codec.EncodeRequest(ctx, tc.request)
+			testutil.Ok(t, err)
+
+			// Execute request
+			resp, err := tpw(rt).RoundTrip(httpReq)
+
+			if tc.expectRejected {
+				// Should be rejected with error
+				testutil.NotOk(t, err)
+			} else {
+				// Should succeed
+				testutil.Ok(t, err)
+				testutil.Assert(t, resp.StatusCode == 200)
+			}
+		})
+	}
+}
