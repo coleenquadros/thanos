@@ -194,7 +194,7 @@ blocked_queries:
 
 Query patterns support:
 - **Exact string matching**: Queries containing the specified string will be blocked
-- **Glob patterns**: Use `*` as a wildcard (e.g., `expensive_*` will block any query starting with "expensive_")
+- **Regular expressions**: Queries matching the specified regex will be blocked
 
 ### Time Range Matching
 
@@ -203,10 +203,16 @@ Time ranges can be specified using:
 - **End time**: Queries ending after this time will be blocked
 - **Both**: Queries must fall within the specified time range
 
+### Time Window Matching
+Time windows can be specified using:
+- **Start time**: Queries starting at or after this time of day will be blocked
+- **End time**: Queries ending at or before this time of day will be blocked
+- **Both**: Queries must fall within the specified time window
+
 ### Metrics
 
 The query rejection middleware exposes the following metric:
-- `cortex_query_frontend_rejected_queries_total`: Total number of queries rejected by the query rejection middleware
+- `query_frontend_rejected_queries_total`: Total number of queries rejected by the query rejection middleware
 
 ## Naming
 
