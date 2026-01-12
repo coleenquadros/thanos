@@ -1102,7 +1102,12 @@ func TestRoundTripQueryRejectMiddleware(t *testing.T) {
 			rt.setHandler(handler)
 
 			ctx := user.InjectOrgID(context.Background(), "1")
-			codec := NewThanosQueryRangeCodec(true)
+			var codec queryrange.Codec
+			if _, ok := tc.request.(*ThanosQueryInstantRequest); ok {
+				codec = NewThanosQueryInstantCodec(false)
+			} else {
+				codec = NewThanosQueryRangeCodec(true)
+			}
 			httpReq, err := codec.EncodeRequest(ctx, tc.request)
 			testutil.Ok(t, err)
 
