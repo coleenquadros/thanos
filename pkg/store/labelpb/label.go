@@ -38,18 +38,36 @@ func noAllocBytes(buf string) []byte {
 	return *(*[]byte)(unsafe.Pointer(&buf))
 }
 
-// ZLabelsFromPromLabels converts Prometheus labels to slice of labelpb.ZLabel in type unsafe manner.
-// It reuses the same memory. Caller should abort using passed labels.Labels.
+// ZLabelsFromPromLabels converts Prometheus labels to slice of labelpb.ZLabel safely.
+// It creates a new slice with proper memory layout.
 func ZLabelsFromPromLabels(lset labels.Labels) []ZLabel {
-	return *(*[]ZLabel)(unsafe.Pointer(&lset))
+	if lset.IsEmpty() {
+		return nil
+	}
+	result := make([]ZLabel, 0, lset.Len())
+	lset.Range(func(lbl labels.Label) {
+		result = append(result, ZLabel{
+			Name:  lbl.Name,
+			Value: lbl.Value,
+		})
+	})
+	return result
 }
 
-// ZLabelsToPromLabels convert slice of labelpb.ZLabel to Prometheus labels in type unsafe manner.
-// It reuses the same memory. Caller should abort using passed []ZLabel.
-// NOTE: Use with care. ZLabels holds memory from the whole protobuf unmarshal, so the returned
-// Prometheus Labels will hold this memory as well.
+// ZLabelsToPromLabels convert slice of labelpb.ZLabel to Prometheus labels safely.
+// It creates new Prometheus labels from the ZLabel slice.
 func ZLabelsToPromLabels(lset []ZLabel) labels.Labels {
-	return *(*labels.Labels)(unsafe.Pointer(&lset))
+	if len(lset) == 0 {
+		return labels.EmptyLabels()
+	}
+	lbls := make([]labels.Label, 0, len(lset))
+	for _, zl := range lset {
+		lbls = append(lbls, labels.Label{
+			Name:  zl.Name,
+			Value: zl.Value,
+		})
+	}
+	return labels.New(lbls...)
 }
 
 // ReAllocAndInternZLabelsStrings re-allocates all underlying bytes for string, detaching it from bigger memory pool.
