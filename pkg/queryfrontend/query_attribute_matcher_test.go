@@ -4,9 +4,10 @@
 package queryfrontend
 
 import (
-	"github.com/prometheus/common/model"
 	"testing"
 	"time"
+
+	"github.com/prometheus/common/model"
 
 	"github.com/stretchr/testify/require"
 )
@@ -246,56 +247,7 @@ func TestQueryAttributeMatcher_TimeWindow(t *testing.T) {
 	}
 }
 
-func TestQueryAttributeMatcher_CombinedAttributes(t *testing.T) {
-	tests := []struct {
-		name     string
-		matcher  QueryAttributeMatcher
-		query    string
-		start    int64
-		end      int64
-		expected bool
-	}{
-		{
-			name: "should match both query pattern and time window",
-			matcher: QueryAttributeMatcher{
-				QueryPatterns: []string{"expensive_query"},
-				TimeWindow: TimeWindow{
-					Start: model.Duration(2 * time.Hour),
-					End:   model.Duration(30 * time.Minute),
-				},
-			},
-			query:    "expensive_query{job=\"test\"}",
-			start:    time.Now().Add(-90 * time.Minute).UnixMilli(),
-			end:      time.Now().Add(-45 * time.Minute).UnixMilli(),
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name+" (range)", func(t *testing.T) {
-			req := &ThanosQueryRangeRequest{
-				Query: tt.query,
-				Start: tt.start,
-				End:   tt.end,
-			}
-
-			result := tt.matcher.Match(req)
-			require.Equal(t, tt.expected, result)
-		})
-
-		t.Run(tt.name+" (instant)", func(t *testing.T) {
-			req := &ThanosQueryInstantRequest{
-				Query: tt.query,
-				Time:  tt.end,
-			}
-			result := tt.matcher.Match(req)
-			require.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-// Add test cases for checking time range
-func TestQueryAtrributeMatcher_matchesTimeRange(t *testing.T) {
+func TestQueryAtrributeMatcher_TimeRange(t *testing.T) {
 	tests := []struct {
 		name       string
 		timeWindow TimeRange
@@ -349,7 +301,7 @@ func TestQueryAtrributeMatcher_matchesTimeRange(t *testing.T) {
 	}
 }
 
-func TestIsWithinQueryStepLimit(t *testing.T) {
+func TestQueryAtrributesMatcher_StepLimit(t *testing.T) {
 	tests := []struct {
 		name     string
 		limit    StepLimit
@@ -388,6 +340,174 @@ func TestIsWithinQueryStepLimit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := isWithinQueryStepLimit(tt.limit, tt.step)
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestQueryAttributeMatcher_DashboardUID(t *testing.T) {
+	tests := []struct {
+		name     string
+		matcher  QueryAttributeMatcher
+		uid      string
+		expected bool
+	}{
+		{
+			name: "should match dashboard UID",
+			matcher: QueryAttributeMatcher{
+				DashboardUID: "dashboard_123",
+			},
+			uid:      "dashboard_123",
+			expected: true,
+		},
+		{
+			name: "should not match different dashboard UID",
+			matcher: QueryAttributeMatcher{
+				DashboardUID: "dashboard_123",
+			},
+			uid:      "dashboard_789",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isMatchDashboardId([]*RequestHeader{
+				{
+					Name:   "X-Dashboard-UID",
+					Values: []string{tt.uid},
+				},
+			}, tt.matcher.DashboardUID)
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestQueryAttributeMatcher_PanelID(t *testing.T) {
+	tests := []struct {
+		name     string
+		matcher  QueryAttributeMatcher
+		panelID  string
+		expected bool
+	}{
+		{
+			name: "should match panel ID",
+			matcher: QueryAttributeMatcher{
+				PanelID: "panel_456",
+			},
+			panelID:  "panel_456",
+			expected: true,
+		},
+		{
+			name: "should not match different panel ID",
+			matcher: QueryAttributeMatcher{
+				PanelID: "panel_456",
+			},
+			panelID:  "panel_999",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isMatchPanelId([]*RequestHeader{
+				{
+					Name:   "X-Panel-ID",
+					Values: []string{tt.panelID},
+				},
+			}, tt.matcher.PanelID)
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestQueryAttributeMatcher_CombinedAttributes(t *testing.T) {
+	tests := []struct {
+		name     string
+		matcher  QueryAttributeMatcher
+		query    string
+		start    int64
+		end      int64
+		step     int64
+		expected bool
+	}{
+		{
+			name: "should match both query pattern and time window",
+			matcher: QueryAttributeMatcher{
+				QueryPatterns: []string{"expensive_query"},
+				TimeWindow: TimeWindow{
+					Start: model.Duration(2 * time.Hour),
+					End:   model.Duration(30 * time.Minute),
+				},
+			},
+			query:    "expensive_query{job=\"test\"}",
+			start:    time.Now().Add(-90 * time.Minute).UnixMilli(),
+			end:      time.Now().Add(-45 * time.Minute).UnixMilli(),
+			expected: true,
+		},
+		{
+			name: "should match both query pattern and dashboard UID",
+			matcher: QueryAttributeMatcher{
+				QueryPatterns: []string{"simple_query"},
+				DashboardUID:  "dashboard_123",
+				TimeWindow: TimeWindow{
+					Start: model.Duration(2 * time.Hour),
+					End:   model.Duration(30 * time.Minute),
+				},
+			},
+			query:    "simple_query{job=\"test\"}",
+			start:    time.Now().Add(-90 * time.Minute).UnixMilli(),
+			end:      time.Now().Add(-45 * time.Minute).UnixMilli(),
+			expected: true,
+		},
+		{
+			name: "should not match when one attribute fails",
+			matcher: QueryAttributeMatcher{
+				QueryPatterns: []string{"simple_query"},
+				DashboardUID:  "dashboard_123",
+				TimeWindow: TimeWindow{
+					Start: model.Duration(2 * time.Hour),
+					End:   model.Duration(30 * time.Minute),
+				},
+			},
+			query:    "simple_query{job=\"test\"}",
+			start:    time.Now().Add(-90 * time.Minute).UnixMilli(),
+			end:      time.Now().Add(-15 * time.Minute).UnixMilli(),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name+" (range)", func(t *testing.T) {
+			req := &ThanosQueryRangeRequest{
+				Query: tt.query,
+				Start: tt.start,
+				End:   tt.end,
+				Step:  tt.step,
+				Headers : []*RequestHeader{
+					{
+						Name:   "X-Dashboard-UID",
+						Values: []string{"dashboard_123"},
+					},
+				},
+			}
+
+			result := tt.matcher.Match(req)
+			require.Equal(t, tt.expected, result)
+		})
+
+		t.Run(tt.name+" (instant)", func(t *testing.T) {
+			req := &ThanosQueryInstantRequest{
+				Query: tt.query,
+				Time:  tt.end,
+				Headers : []*RequestHeader{
+					{
+						Name:   "X-Dashboard-UID",
+						Values: []string{"dashboard_123"},
+					},
+				},
+			}
+			result := tt.matcher.Match(req)
 			require.Equal(t, tt.expected, result)
 		})
 	}

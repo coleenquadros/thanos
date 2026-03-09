@@ -5,9 +5,10 @@ package queryfrontend
 
 import (
 	"context"
-	"github.com/prometheus/common/model"
 	"testing"
 	"time"
+
+	"github.com/prometheus/common/model"
 
 	"github.com/thanos-io/thanos/internal/cortex/querier/queryrange"
 
@@ -21,6 +22,7 @@ func TestQueryRejectionMiddleware(t *testing.T) {
 		config        QueryRejectionConfig
 		query         string
 		start, end    int64
+		step          int64
 		shouldReject  bool
 		expectedError string
 	}{
@@ -71,6 +73,23 @@ func TestQueryRejectionMiddleware(t *testing.T) {
 			shouldReject:  true,
 			expectedError: "query rejected: query 'any_query' matches blocked pattern",
 		},
+		{
+			name: "should reject query exceeding step limit",
+			config: QueryRejectionConfig{
+				BlockedQueries: []QueryAttributeMatcher{
+					{
+						QueryStepLimit: StepLimit{
+							Max: model.Duration(5 * time.Minute),
+						},
+					},
+				},
+			},
+			query:         "any_query",
+			step:           int64((1 * time.Minute).Milliseconds()),
+
+			shouldReject:  true,
+			expectedError: "query rejected: query 'any_query' matches blocked pattern",
+		},
 	}
 
 	for _, tt := range tests {
@@ -82,6 +101,7 @@ func TestQueryRejectionMiddleware(t *testing.T) {
 				Query: tt.query,
 				Start: tt.start,
 				End:   tt.end,
+				Step:  tt.step,
 			}
 
 			// Create a mock handler that always succeeds
